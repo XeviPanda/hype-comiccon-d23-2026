@@ -555,14 +555,14 @@
     if(video){
       var thumb = 'https://img.youtube.com/vi/'+video.id+'/hqdefault.jpg';
       return '<div class="video-wrap clickable" data-yt="'+video.id+'">'+
-        '<img class="thumb" loading="lazy" src="'+thumb+'" alt="Miniatura del tráiler">'+
+        '<img class="thumb" src="'+thumb+'" alt="Miniatura del tráiler">'+
         '<div class="play-btn"></div>'+
         (video.official===false ? '<span class="thumb-tag">metraje no oficial</span>' : '')+
       '</div>';
     }
     if(poster){
       return '<div class="video-wrap">'+
-        '<img class="thumb" loading="lazy" src="'+poster.url+'" alt="Imagen promocional">'+
+        '<img class="thumb" src="'+poster.url+'" alt="Imagen promocional">'+
         '<span class="thumb-tag">imagen: '+poster.credit+'</span>'+
       '</div>';
     }
@@ -675,7 +675,7 @@
     document.querySelectorAll(".video-wrap.clickable").forEach(function(wrap){
       wrap.addEventListener("click", function(){
         var id = wrap.dataset.yt;
-        wrap.outerHTML = '<div class="video-wrap"><iframe loading="lazy" src="https://www.youtube.com/embed/'+id+'?autoplay=1" title="Trailer" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>';
+        wrap.outerHTML = '<div class="video-wrap"><iframe src="https://www.youtube.com/embed/'+id+'?autoplay=1" title="Trailer" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>';
       });
     });
     document.querySelectorAll(".judge-row").forEach(function(row){
