@@ -760,62 +760,58 @@
   }
 
   // ---- Google Trends widgets (external "hype" signal) -----------------
-  // Google's own embed script (embed_loader.js) only knows how to append its
-  // iframe as a new child of <body> — it ignores any container you give it.
-  // So the flow per card is: inject a tiny inline <script> that calls
-  // trends.embed.renderExploreWidget(...), wait for the fresh iframe to show
-  // up at the end of <body>, then move it into this card's placeholder and
-  // resize it. Loaded once per card, the first time its <details> is opened.
-  var trendsLoaderPromise = null;
-  function ensureTrendsLoader(){
-    if(window.trends && window.trends.embed) return Promise.resolve();
-    if(trendsLoaderPromise) return trendsLoaderPromise;
-    trendsLoaderPromise = new Promise(function(resolve, reject){
-      var s = document.createElement("script");
-      s.src = "https://ssl.gstatic.com/trends_nrtr/4545_RC01/embed_loader.js";
-      s.onload = resolve;
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
-    return trendsLoaderPromise;
+  // Google's own embed script always appends its iframe as a new child of
+  // <body>, ignoring whatever container you pass it — and reparenting that
+  // iframe into a card afterwards turned out to be unsafe (it could trigger
+  // a full top-level reload of this page in testing). So instead each card
+  // gets its OWN sandboxed <iframe srcdoc="..."> with a tiny self-contained
+  // HTML document inside: THAT inner document's <body> is what Google's
+  // loader appends to, fully isolated from the real page. Whatever Google's
+  // script does, it can only affect that little sandbox, never us. Loaded
+  // once per card, the first time its <details> is opened.
+  function trendsIframeDoc(query){
+    var config = JSON.stringify({comparisonItem:[{keyword:query, geo:"", time:"today 12-m"}], category:0, property:""});
+    var opts = JSON.stringify({exploreQuery:"q="+encodeURIComponent(query)+"&date=today 12-m", guestPath:"https://trends.google.com:443/trends/embed/"});
+    return "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" +
+      "<style>html,body{margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif;}" +
+      ".msg{font-size:12px;color:#5f6368;padding:14px;text-align:center;}</style></head>" +
+      "<body><div class=\"msg\">Cargando…</div>" +
+      "<script src=\"https://ssl.gstatic.com/trends_nrtr/4545_RC01/embed_loader.js\" " +
+        "onerror=\"document.body.innerHTML='<p class=&quot;msg&quot;>No se pudo cargar Google Trends.</p>'\"><\/script>" +
+      "<script>" +
+        "window.addEventListener('load', function(){" +
+          "if(window.trends && trends.embed){" +
+            "document.querySelector('.msg').remove();" +
+            "trends.embed.renderExploreWidget('TIMESERIES'," + config + "," + opts + ");" +
+          "} else {" +
+            "document.querySelector('.msg').textContent='No se pudo cargar Google Trends.';" +
+          "}" +
+        "});" +
+      "<\/script></body></html>";
   }
 
   function loadTrendsWidget(box){
     var query = box.dataset.query;
     var target = box.querySelector(".trends-embed-inner");
-    ensureTrendsLoader().then(function(){
-      var before = document.querySelectorAll('iframe[id^="trends-widget-"]').length;
-      var s = document.createElement("script");
-      s.text = 'trends.embed.renderExploreWidget("TIMESERIES",' +
-        '{"comparisonItem":[{"keyword":' + JSON.stringify(query) + ',"geo":"","time":"today 12-m"}],"category":0,"property":""},' +
-        '{"exploreQuery":"q=' + encodeURIComponent(query) + '&date=today 12-m","guestPath":"https://trends.google.com:443/trends/embed/"});';
-      document.body.appendChild(s);
-      s.remove();
-      // Poll briefly for the new iframe rather than assuming a fixed id offset,
-      // since ids increment globally across every widget opened this session.
-      var tries = 0;
-      var poll = setInterval(function(){
-        tries++;
-        var iframes = document.querySelectorAll('iframe[id^="trends-widget-"]');
-        if(iframes.length > before){
-          clearInterval(poll);
-          var frame = iframes[iframes.length - 1];
-          frame.style.width = "100%";
-          frame.style.height = "260px";
-          frame.style.border = "0";
-          frame.style.display = "block";
-          target.innerHTML = "";
-          target.appendChild(frame);
-        } else if(tries > 40){ // ~10s
-          clearInterval(poll);
+    var iframe = document.createElement("iframe");
+    iframe.style.cssText = "width:100%; height:260px; border:0; display:block;";
+    iframe.setAttribute("sandbox", "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox");
+    iframe.setAttribute("referrerpolicy", "no-referrer-when-downgrade");
+    iframe.srcdoc = trendsIframeDoc(query);
+    target.innerHTML = "";
+    target.appendChild(iframe);
+    // If nothing rendered inside the sandbox within ~10s (blocked by an
+    // ad-blocker, offline, etc.) offer a direct link out as a fallback —
+    // best-effort only, since the sandbox may not let us peek inside.
+    setTimeout(function(){
+      try{
+        var innerBody = iframe.contentDocument && iframe.contentDocument.body;
+        if(innerBody && innerBody.querySelector(".msg")){
           target.innerHTML = '<p class="trends-error">No se ha podido cargar el widget de Google Trends (puede que un bloqueador de anuncios lo esté frenando). '+
             '<a href="https://trends.google.com/trends/explore?date=today%2012-m&q='+encodeURIComponent(query)+'" target="_blank" rel="noopener">Verlo directamente en Google Trends</a>.</p>';
         }
-      }, 250);
-    }).catch(function(){
-      target.innerHTML = '<p class="trends-error">No se ha podido cargar el widget de Google Trends. '+
-        '<a href="https://trends.google.com/trends/explore?date=today%2012-m&q='+encodeURIComponent(query)+'" target="_blank" rel="noopener">Verlo directamente en Google Trends</a>.</p>';
-    });
+      }catch(e){ /* cross-origin after Google's script runs: can't peek, and that's fine — leave the iframe as-is */ }
+    }, 10000);
   }
 
   function wireTrendsBoxes(){
