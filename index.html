@@ -140,6 +140,15 @@
   .no-video.ev-comiccon{background:linear-gradient(135deg, var(--comiccon), #17335a);}
   .no-video.ev-d23{background:linear-gradient(135deg, var(--d23), #5a2c13);}
   .trailer-flag{font-size:11px; color:var(--warn); margin-top:-4px;}
+  .trends-box{
+    border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin-top:2px;
+    background:var(--surface-1);
+  }
+  .trends-box summary{cursor:pointer; font-size:12.5px; font-weight:600; color:var(--text-secondary);}
+  .trends-embed-wrap{margin-top:10px; border-radius:8px; overflow:hidden; background:#fff;}
+  .trends-embed-inner{min-height:100px; display:flex; align-items:center; justify-content:center; font-size:12.5px; color:#5f6368; padding:10px; text-align:center;}
+  .trends-note{font-size:11px; color:var(--text-muted); margin:8px 0 0;}
+  .trends-error a{color:var(--link);}
   .score-box{background:var(--surface-2); border-radius:10px; padding:12px 14px; margin-top:2px;}
   .judge-row{display:grid; grid-template-columns:78px 1fr 34px 1fr 34px; gap:8px; align-items:center; margin-bottom:8px; font-size:12.5px;}
   .judge-row:last-of-type{margin-bottom:0;}
@@ -196,11 +205,11 @@
     </div>
     <div class="header-actions">
       <button id="theme-toggle" title="Cambiar tema claro/oscuro">Tema</button>
-      <button id="copy-link" title="Copiar un enlace con los resultados actuales">Copiar enlace con resultados</button>
-      <button id="export-json">Exportar JSON</button>
-      <button id="import-json">Importar JSON</button>
+      <button id="copy-link" title="Copia una URL que ya lleva dentro las notas actuales, para compartirla o guardarla como marcador">Copiar enlace con resultados</button>
+      <button id="export-json" title="Descarga un archivo .json con todas las notas actuales, como copia de seguridad o para pasárselo a otra persona">Exportar JSON (copia de seguridad)</button>
+      <button id="import-json" title="Carga un archivo .json exportado antes (el tuyo u otro) y sustituye las notas actuales por las de ese archivo">Importar JSON (cargar copia)</button>
       <input type="file" id="import-file" accept="application/json" style="display:none">
-      <button id="reset-scores" title="Borra todas las notas">Borrar notas</button>
+      <button id="reset-scores" title="Borra todas las notas de Hype, Confianza y comentarios de los tres jueces. No se puede deshacer.">Borrar notas</button>
       <a class="btn primary" href="#ranking" style="text-decoration:none; display:inline-block;">Ir al ranking</a>
     </div>
   </div>
@@ -226,7 +235,8 @@
       <li><b>D23: The Ultimate Disney Fan Event 2026:</b> 14–16 de agosto de 2026, Anaheim Convention Center + Honda Center. <b>Ya ha terminado</b> — esta página incluye lo anunciado hasta el último día, incluidos el Entertainment Showcase (viernes), la ceremonia Disney Legends y el Experiences Showcase (parques, no incluido aquí por no ser cine/TV).</li>
       <li><b>Eventos similares recientes:</b> ninguno comparable en cine/TV entre ambos. Gamescom (Colonia, ~19–23 ago 2026) es la única cita grande cercana en el calendario, pero centrada en videojuegos.</li>
       <li>Cada ficha tiene su tráiler (si existe) y tres sliders de 0 a 5 para Hype y Confianza de Remy, Xevi y Masterwikie. La <a href="#ranking">tabla final</a> se calcula sola.</li>
-      <li>No hay servidor: cada nota se autoguarda en este navegador según la vais escribiendo (aunque cerréis la pestaña sin hacer nada más, seguirá ahí la próxima vez que abráis esta página desde aquí). Para pasar los resultados a otro dispositivo o a otra persona, usad "Copiar enlace con resultados" (mete una foto de las notas en la URL) o "Exportar/Importar JSON".</li>
+      <li>No hay servidor: cada nota se autoguarda en este navegador según la vais escribiendo (aunque cerréis la pestaña sin hacer nada más, seguirá ahí la próxima vez que abráis esta página desde aquí).</li>
+      <li><b>Para pasar las notas a otro sitio</b> (otro dispositivo, otra persona, o simplemente para no perderlas): "Copiar enlace con resultados" copia una URL que ya lleva las notas metidas dentro — al abrirla en cualquier sitio, aparecen puestas. "Exportar JSON" descarga un archivito con las notas como copia de seguridad; "Importar JSON" carga uno de esos archivos y reemplaza lo que haya puesto ahora mismo. "Borrar notas" las pone todas a cero (sin deshacer).</li>
     </ul>
   </details>
   <details class="info-box">
@@ -488,6 +498,36 @@
     }
   ];
 
+  // Search terms used for the Google Trends widget on each card. Deliberately
+  // NOT just c.title — several titles are one common word ("Avatar", "Silo",
+  // "Clayface") that would pull in unrelated search volume, so each term here
+  // adds just enough context to disambiguate while staying a term a real
+  // person would actually search.
+  var TRENDS_QUERIES = {
+    doomsday:"Avengers Doomsday",
+    ghostrider:"Ghost Rider Ryan Gosling",
+    blackpanther3:"Black Panther 3",
+    lanterns:"Lanterns HBO Max",
+    knightfall:"Batman Knightfall",
+    clayface:"Clayface movie",
+    spaceballs:"Spaceballs The New One",
+    ringsofpower3:"The Rings of Power season 3",
+    bladerunner2099:"Blade Runner 2099",
+    neuromancer:"Neuromancer Apple TV",
+    silo4:"Silo season 4",
+    avatar:"Avatar Seven Havens",
+    xmen:"X-Men Marvel reboot",
+    visionquest:"VisionQuest Marvel",
+    starfighter:"Star Wars Starfighter",
+    ahsoka2:"Ahsoka season 2",
+    incredibles3:"The Incredibles 3",
+    coco2:"Coco 2",
+    frozen3:"Frozen 3",
+    tangled:"Tangled live action",
+    ghostmarket:"Ghost Market Pixar",
+    kingdomhearts:"Kingdom Hearts anime series"
+  };
+
   // ---- State -----------------------------------------------------------
   // scores[cardId] = { Remy:{hype:0,conf:0}, Xevi:{...}, Masterwikie:{...}, note:"" }
   var scores = {};
@@ -573,6 +613,20 @@
     return sources.map(function(s){ return '<a href="'+s.url+'" target="_blank" rel="noopener">'+s.label+'</a>'; }).join(" ");
   }
 
+  // Live Google Trends "interest over time" widget, one per card, as an
+  // external signal separate from the jury's own Hype/Confianza notes. Loaded
+  // on demand (first time the <details> opens) so 22 cards don't fire 22
+  // requests to Google on page load — same click/open-to-load idea as the
+  // trailers. See wireTrendsBoxes() for the loading logic.
+  function trendsHtml(c){
+    var query = TRENDS_QUERIES[c.id] || c.title;
+    return '<details class="trends-box" data-query="'+query.replace(/"/g,'&quot;')+'">'+
+      '<summary>Interés en Google Trends (búsqueda: "'+query+'")</summary>'+
+      '<div class="trends-embed-wrap"><div class="trends-embed-inner">Cargando datos de Google Trends…</div></div>'+
+      '<p class="trends-note">Interés de búsqueda mundial en los últimos 12 meses — no es lo mismo que "hype", pero es una señal externa que no dependemos de poner nosotros. El widget es de Google y siempre se ve en claro, aunque la página esté en modo oscuro.</p>'+
+    '</details>';
+  }
+
   function cardHtml(c){
     var rows = JUDGES.map(function(j){
       return '<div class="judge-row" data-card="'+c.id+'" data-judge="'+j+'">'+
@@ -593,6 +647,7 @@
       '<div><p class="field-label">Última vez que vimos algo</p><p class="field-text">'+c.lastSeen+'</p></div>'+
       '<div><p class="field-label">Novedades presentadas</p><p class="field-text">'+c.news+'</p></div>'+
       '<div class="sources">Fuentes: '+sourcesHtml(c.sources)+'</div>'+
+      trendsHtml(c)+
       '<div class="score-box">'+
         '<p class="field-label" style="margin-bottom:8px;">Notas del jurado (0–5)</p>'+
         '<div class="score-cols-label"><span></span><span>Hype</span><span></span><span>Confianza</span><span></span></div>'+
@@ -704,6 +759,76 @@
     CARDS.forEach(function(c){ updateCardMeters(c.id); });
   }
 
+  // ---- Google Trends widgets (external "hype" signal) -----------------
+  // Google's own embed script (embed_loader.js) only knows how to append its
+  // iframe as a new child of <body> — it ignores any container you give it.
+  // So the flow per card is: inject a tiny inline <script> that calls
+  // trends.embed.renderExploreWidget(...), wait for the fresh iframe to show
+  // up at the end of <body>, then move it into this card's placeholder and
+  // resize it. Loaded once per card, the first time its <details> is opened.
+  var trendsLoaderPromise = null;
+  function ensureTrendsLoader(){
+    if(window.trends && window.trends.embed) return Promise.resolve();
+    if(trendsLoaderPromise) return trendsLoaderPromise;
+    trendsLoaderPromise = new Promise(function(resolve, reject){
+      var s = document.createElement("script");
+      s.src = "https://ssl.gstatic.com/trends_nrtr/4545_RC01/embed_loader.js";
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+    return trendsLoaderPromise;
+  }
+
+  function loadTrendsWidget(box){
+    var query = box.dataset.query;
+    var target = box.querySelector(".trends-embed-inner");
+    ensureTrendsLoader().then(function(){
+      var before = document.querySelectorAll('iframe[id^="trends-widget-"]').length;
+      var s = document.createElement("script");
+      s.text = 'trends.embed.renderExploreWidget("TIMESERIES",' +
+        '{"comparisonItem":[{"keyword":' + JSON.stringify(query) + ',"geo":"","time":"today 12-m"}],"category":0,"property":""},' +
+        '{"exploreQuery":"q=' + encodeURIComponent(query) + '&date=today 12-m","guestPath":"https://trends.google.com:443/trends/embed/"});';
+      document.body.appendChild(s);
+      s.remove();
+      // Poll briefly for the new iframe rather than assuming a fixed id offset,
+      // since ids increment globally across every widget opened this session.
+      var tries = 0;
+      var poll = setInterval(function(){
+        tries++;
+        var iframes = document.querySelectorAll('iframe[id^="trends-widget-"]');
+        if(iframes.length > before){
+          clearInterval(poll);
+          var frame = iframes[iframes.length - 1];
+          frame.style.width = "100%";
+          frame.style.height = "260px";
+          frame.style.border = "0";
+          frame.style.display = "block";
+          target.innerHTML = "";
+          target.appendChild(frame);
+        } else if(tries > 40){ // ~10s
+          clearInterval(poll);
+          target.innerHTML = '<p class="trends-error">No se ha podido cargar el widget de Google Trends (puede que un bloqueador de anuncios lo esté frenando). '+
+            '<a href="https://trends.google.com/trends/explore?date=today%2012-m&q='+encodeURIComponent(query)+'" target="_blank" rel="noopener">Verlo directamente en Google Trends</a>.</p>';
+        }
+      }, 250);
+    }).catch(function(){
+      target.innerHTML = '<p class="trends-error">No se ha podido cargar el widget de Google Trends. '+
+        '<a href="https://trends.google.com/trends/explore?date=today%2012-m&q='+encodeURIComponent(query)+'" target="_blank" rel="noopener">Verlo directamente en Google Trends</a>.</p>';
+    });
+  }
+
+  function wireTrendsBoxes(){
+    document.querySelectorAll(".trends-box").forEach(function(box){
+      box.addEventListener("toggle", function(){
+        if(box.open && !box.dataset.loaded){
+          box.dataset.loaded = "1";
+          loadTrendsWidget(box);
+        }
+      });
+    });
+  }
+
   document.querySelectorAll("nav.filters .tab").forEach(function(btn){
     btn.addEventListener("click", function(){
       document.querySelectorAll("nav.filters .tab").forEach(function(b){ b.setAttribute("aria-pressed","false"); });
@@ -768,7 +893,7 @@
       try{
         var data = JSON.parse(ev.target.result);
         Object.keys(data).forEach(function(id){ if(scores[id]) scores[id] = data[id]; });
-        renderCards(); wireCardInputs(); renderRanking(); saveState();
+        renderCards(); wireCardInputs(); wireTrendsBoxes(); renderRanking(); saveState();
       }catch(err){ alert("El archivo no es un JSON válido exportado desde esta página."); }
     };
     reader.readAsText(file);
@@ -780,13 +905,14 @@
       scores[c.id] = {note:""};
       JUDGES.forEach(function(j){ scores[c.id][j] = {hype:0, conf:0}; });
     });
-    renderCards(); wireCardInputs(); renderRanking(); saveState();
+    renderCards(); wireCardInputs(); wireTrendsBoxes(); renderRanking(); saveState();
   });
 
   // ---- Init --------------------------------------------------------
   loadState();
   renderCards();
   wireCardInputs();
+  wireTrendsBoxes();
   renderRanking();
 
 })();
